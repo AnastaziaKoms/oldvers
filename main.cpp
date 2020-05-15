@@ -1,107 +1,124 @@
 #include <iostream>
 #include <ctime>
 #include <ncurses.h>
-#include <string>
+#include <vector>
 
 using namespace std;
 
-struct Point
-{
+struct Point {
     size_t x;
     size_t y;
+
     Point(size_t x, size_t y) : x(x), y(y) {}
+
     Point() {}
 };
 
-class Map
-{
+class Map {
 public:
     Point map_size;
-    char matrix[100][100];
+    vector<vector<char>> matrix;
     int count;
 
-    Map(size_t a, size_t b)
-    {
+    Map(size_t a, size_t b) {
         map_size.x = a;
         map_size.y = b;
         count = a * 2 + 1;
-        for (int i = 0; i < map_size.x; ++i)
-        {
-            for (int j = 0; j < map_size.y; ++j)
-            {
-                matrix[i][j] = ' ';
-            }
+        for (int i = 0; i < map_size.x; ++i) {
+            matrix.push_back(vector<char>(b, ' '));
         }
     }
 
-    char &operator()(Point coord)
-    {
+    char &operator()(Point coord) {
         return matrix[coord.y][coord.x];
     }
-    char operator()(Point coord) const
-    {
+
+    char operator()(Point coord) const {
         return matrix[coord.y][coord.x];
     }
+
 };
 
-class Gamer
-{
-private:
-    char sym;
-public:
-    char GetChar() {
-        return sym;
-    }
-    explicit Gamer(char s): sym(s) {}
-};
 
-class GameManager
-{
+class GameManager {
 public:
     Map map;
     bool flag;
-    Gamer first;
-    Gamer second;
+    char first = 'X';
+    char second = '0';
     int size;
     int win_block;
 
-    Gamer* currentGamer;
+    char currentGamer;
 
-    GameManager(int n, int w, Point start_coord) : map(n, n), flag(true), first('X'), second('0'), currentGamer(&first), size(n), win_block(w)
-    {
+
+    Point cordpoint;
+
+    GameManager(int n, int w, Point start_coord) : win_block(w), map(n, n), flag(true), currentGamer(first),
+                                                   cordpoint(start_coord), size(n) {
     }
 
-    void play()
-    {
-        while (true)
-        {
-            HandleInput();
+    void play() {
+        while (true) {
+            HandleInput(getch());
             WindowRender();
         }
     }
 
-    void HandleInput()
-    {
-        char s[100];
-        getstr(s);
-        string str(s);
-        if(str.length() != 2 || (int)str[0] < 97 || (int)str[1] < 49) {
-            return;
+    void HandleInput(chtype c) {
+        switch (c) {
+            case KEY_UP:
+                if (cordpoint.y != 0)
+                    cordpoint.y -= 1;
+                break;
+            case KEY_DOWN:
+                if (cordpoint.y != size - 1)
+                    cordpoint.y += 1;
+                break;
+            case KEY_LEFT:
+                if (cordpoint.x != 0)
+                    cordpoint.x -= 1;
+                break;
+            case KEY_RIGHT:
+                if (cordpoint.x != size - 1)
+                    cordpoint.x += 1;
+                break;
+            case 32:
+                TakeMove(cordpoint);
+                break;
         }
-        Point p(str[1] - '0' - 1,(int)str[0] - 97);
 
-        if(map(p) != ' ') return;
-        map(p) = currentGamer->GetChar();
 
-        if(Checkwin(currentGamer->GetChar()) || isMapFull()) exit(0);
-        SwapGamers();
+    }
+
+    void TakeMove(Point cord) {
+        if (map.matrix[cord.y][cord.x] == ' ') {
+            map.matrix[cord.y][cord.x] = currentGamer;
+            if (Checkwin(currentGamer)) {
+                clear();
+                mvprintw(getmaxy(stdscr) / 2, (getmaxx(stdscr) - 10) / 2, "%c WINER!!!", currentGamer);
+                getch();
+                exit(0);
+            }
+            if (isMapFull()) {
+                clear();
+                mvprintw(getmaxy(stdscr) / 2, (getmaxx(stdscr) - 9) / 2, "LOSERS !.");
+                getch();
+                exit(0);
+            }
+            SwapGamers();
+        }
+
+    }
+
+    void SwapGamers() {
+        if (currentGamer == first) currentGamer = second;
+        else currentGamer = first;
     }
 
     bool Checkwin(char sym) {
-        for (size_t col = 0; col < size-win_block+1; col++)
-        {
-            for (size_t row = 0; row < size-win_block+1; row++)
-            {
+        for (size_t col = 0; col < size - win_block + 1; col++) {
+            for (size_t row = 0; row < size - win_block + 1; row++) {
                 if (checkDiagonal(sym, col, row) || checkLanes(sym, col, row)) return true;
             }
 
@@ -113,9 +130,9 @@ public:
         bool toright, toleft;
         toright = true;
         toleft = true;
-        for (int i=0; i<win_block; i++) {
-            toright &= (map.matrix[i+offsetX][i+offsetY] == symb);
-            toleft &= (map.matrix[win_block-i-1+offsetX][i+offsetY] == symb);
+        for (int i = 0; i < win_block; i++) {
+            toright &= (map.matrix[i + offsetX][i + offsetY] == symb);
+            toleft &= (map.matrix[win_block - i - 1 + offsetX][i + offsetY] == symb);
         }
 
         if (toright || toleft) return true;
@@ -123,13 +140,12 @@ public:
         return false;
     }
 
-    /** Проверяем горизонтальные и вертикальные линии */
     bool checkLanes(char symb, int offsetX, int offsetY) {
         bool cols, rows;
-        for (int col=offsetX; col<win_block+offsetX; col++) {
+        for (int col = offsetX; col < win_block + offsetX; col++) {
             cols = true;
             rows = true;
-            for (int row=offsetY; row<win_block+offsetY; row++) {
+            for (int row = offsetY; row < win_block + offsetY; row++) {
                 cols &= (map.matrix[col][row] == symb);
                 rows &= (map.matrix[row][col] == symb);
             }
@@ -149,71 +165,120 @@ public:
         return true;
     }
 
-    void SwapGamers() {
-        if(currentGamer == &first)
-            currentGamer = &second;
-        else if (currentGamer == &second)
-            currentGamer = &first;
-    }
 
-    void WindowRender()
-    {
+    void WindowRender() {
+
         clear();
+        int coeff = (getmaxx(stdscr) - map.count) / 2;
         size_t x, y;
-        for (y = 0; y < map.map_size.y * 2; y++)
-        {
+        chtype c;
+        for (y = 0; y < map.map_size.y * 2; y++) {
 
-            if (y % 2 == 0)
-            {
-                for (x = 0; x < map.count; x++)
-                {
-                    mvprintw(y, x, "%c", '-');
+            if (y % 2 == 0) {
+                for (x = 0; x < map.count; x++) {
+                    mvprintw(y + 4, coeff + x, "%c", '-');
                 }
-            }
-            else
-            {
-                for (x = 0; x < map.map_size.x * 2; x += 2)
-                {
-                    mvprintw(y, x, "%c", '|');
-                    mvprintw(y, x+1, "%c", map(Point(x/2, y/2)));
+            } else {
+                for (x = 0; x < map.map_size.x * 2; x += 2) {
+                    mvprintw(y + 4, coeff + x, "%c", '|');
+                    c = map.matrix[(y / 2)][x / 2];
+                    if (c == '0') {
+                        move(y + 4, coeff + x + 1);
+                        addch(c | COLOR_PAIR(2));
+                        continue;
+                    }
+                    mvprintw(y + 4, coeff + x + 1, "%c", map.matrix[(y / 2)][x / 2]);
+
                 }
-                mvprintw(y, x, "%c", '|');
+                mvprintw(y + 4, coeff + x, "%c", '|');
             }
+
         }
-        for (x = 0; x < map.count; x++)
-        {
-            mvprintw(y, x, "%c", '-');
+        for (x = 0; x < map.count; x++) {
+            mvprintw(y + 4, coeff + x, "%c", '-');
         }
-        mvprintw(map.count,0,"Input coordinates:");
+        mvprintw(cordpoint.y * 2 + 5, cordpoint.x * 2 + coeff + 1, "%c", '*');
     }
 };
 
-int main()
-{
+void Menu() {
+    const char items[3][8] = {
+            "Play   ",
+            "Credits",
+            "Exit   "
+    };
+    int p = 0;
+    while (true) {
+        clear();
+        box(stdscr, 0, 0);
+
+        for (int i = 0; i < 3; i++) {
+            move((getmaxy(stdscr)) / 2 + i, getmaxx(stdscr) / 2 - 5);
+            if (i == p)
+                addch('-');
+            else
+                addch(' ');
+
+            printw("%s\n", items[i]);
+        }
+
+        switch (getch()) {
+            case KEY_UP:
+                if (p)
+                    p--;
+                break;
+            case KEY_DOWN:
+                if (p != 2)
+                    p++;
+                break;
+            case 10:
+                if (p == 0) return;
+                if (p == 1) {
+                    clear();
+                    mvprintw(getmaxy(stdscr) / 2, (getmaxx(stdscr) - 30) / 2, "Nastya aka TurboCoder was here.");
+                    getch();
+
+                }
+                if (p == 2) {
+                    clear();
+                    exit(0);
+                }
+                break;
+        }
+    }
+}
+
+int main() {
     int n;
     int w;
     initscr();
-    //noecho();
     cbreak();
     keypad(stdscr, TRUE);
-    while (true)
-    {
+    curs_set(0);
+    clear();
+    start_color();
+    init_pair(1, COLOR_BLACK, COLOR_YELLOW);
+    init_pair(2, COLOR_RED, COLOR_YELLOW);
+
+    attron(COLOR_PAIR(1));
+    bkgd(COLOR_PAIR(1));
+
+
+    Menu();
+
+    while (true) {
         clear();
-        addstr("Input field:");
+        mvprintw(getmaxy(stdscr) / 2, getmaxx(stdscr) / 2 - 9, "Input field:");
         scanw("%d", &n);
         if (n >= 3 && n <= 10) break;
     }
 
-    while (true)
-    {
+    while (true) {
         clear();
-        addstr("Input win number:");
+        mvprintw(getmaxy(stdscr) / 2, getmaxx(stdscr) / 2 - 9, "Input win number:");
         scanw("%d", &w);
-        if(w >= 3 && w <= n) break;
+        if (w >= 3 && w <= n) break;
     }
-
-    curs_set(0);
-    //
     GameManager Game(n, w, Point(n / 2, n / 2));
     Game.WindowRender();
     Game.play();
